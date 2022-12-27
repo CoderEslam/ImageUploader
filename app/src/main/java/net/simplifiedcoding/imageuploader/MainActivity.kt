@@ -1,11 +1,14 @@
 package net.simplifiedcoding.imageuploader
 
 import android.app.Activity
-import android.content.ContentResolver
+import android.content.ContentValues
+import android.content.Context
 import android.content.Intent
+import android.database.Cursor
 import android.net.Uri
 import android.os.Bundle
-import android.provider.OpenableColumns
+import android.provider.MediaStore
+import android.util.Log
 import androidx.appcompat.app.AppCompatActivity
 import kotlinx.android.synthetic.main.activity_main.*
 import okhttp3.MediaType
@@ -18,6 +21,8 @@ import java.io.File
 import java.io.FileInputStream
 import java.io.FileOutputStream
 
+
+private const val TAG = "MainActivity"
 
 class MainActivity : AppCompatActivity(), UploadRequestBody.UploadCallback {
 
@@ -51,6 +56,7 @@ class MainActivity : AppCompatActivity(), UploadRequestBody.UploadCallback {
             when (requestCode) {
                 REQUEST_CODE_PICK_IMAGE -> {
                     selectedImageUri = data?.data
+                    Log.e(TAG, "onActivityResult: $selectedImageUri")
                     image_view.setImageURI(selectedImageUri)
                 }
             }
@@ -65,9 +71,17 @@ class MainActivity : AppCompatActivity(), UploadRequestBody.UploadCallback {
 
         val parcelFileDescriptor =
             contentResolver.openFileDescriptor(selectedImageUri!!, "r", null) ?: return
-
         val inputStream = FileInputStream(parcelFileDescriptor.fileDescriptor)
         val file = File(cacheDir, contentResolver.getFileName(selectedImageUri!!))
+//        val file = File(selectedImageUri.toString())
+        Log.e(TAG, "uploadImage: $file")
+        Log.e(
+            TAG,
+            "uploadImage Function: " + getImageContentUri(
+                this,
+                File("/storage/emulated/0/Download/1671898301096.png")  //content://media/external/images/media/464623
+            )
+        )
         val outputStream = FileOutputStream(file)
         inputStream.copyTo(outputStream)
 
@@ -106,4 +120,28 @@ class MainActivity : AppCompatActivity(), UploadRequestBody.UploadCallback {
     companion object {
         const val REQUEST_CODE_PICK_IMAGE = 101
     }
+
+    fun getImageContentUri(context: Context, imageFile: File): Uri? {
+        val filePath = imageFile.absolutePath
+        val cursor: Cursor? = context.contentResolver.query(
+            MediaStore.Images.Media.EXTERNAL_CONTENT_URI, arrayOf(MediaStore.Images.Media._ID),
+            MediaStore.Images.Media.DATA + "=? ", arrayOf(filePath), null
+        )
+        return if (cursor != null && cursor.moveToFirst()) {
+            val id: Int = cursor.getInt(cursor.getColumnIndex(MediaStore.MediaColumns._ID))
+            cursor.close()
+            Uri.withAppendedPath(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, "" + id)
+        } else {
+            if (imageFile.exists()) {
+                val values = ContentValues()
+                values.put(MediaStore.Images.Media.DATA, filePath)
+                context.contentResolver.insert(
+                    MediaStore.Images.Media.EXTERNAL_CONTENT_URI, values
+                )
+            } else {
+                null
+            }
+        }
+    }
+
 }
